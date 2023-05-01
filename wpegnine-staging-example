@@ -1,0 +1,38 @@
+name: Deploy to WP Engine Staging
+on:
+  push:
+    branches: staging
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: "13.13.0"
+
+      - name: Building assets
+        run: |
+          npm install
+          ./node_modules/.bin/gulp
+      - name: GitHub Action Deploy to WP Engine
+        uses: wpengine/github-action-wpe-site-deploy@v3.1.1
+        with:
+          # Deploy vars
+          WPE_SSHG_KEY_PRIVATE: ${{ secrets.WPE_SSHG_KEY_PRIVATE }}
+          PHP_LINT: true
+          CACHE_CLEAR: TRUE
+
+          # GITHUB file location
+          SRC_PATH: "public/wp-content/themes/"
+
+          # WPEngine server location
+          REMOTE_PATH: "wp-content/themes/"
+
+          FLAGS: -azvr --inplace --delete --exclude=".*" --exclude-from=deployignore.txt
+
+          # Environments
+          STG_ENV: [staging env name]
