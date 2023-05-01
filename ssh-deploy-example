@@ -1,0 +1,63 @@
+name: Deploy to Testing
+
+on:
+  push:
+    branches: [testing]
+
+jobs:
+  deploy-to-testing:
+    name: Deploy to Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: REQUIRED - Checkout repo
+        uses: actions/checkout@v2
+
+      - name: REQUIRED - Set repo permissions for deployment
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: ${{ secrets.TESTING_REMOTE_HOST }}
+          username: ${{ secrets.TESTING_REMOTE_DEPLOYMENT_USER }}
+          key: ${{ secrets.TESTING_REMOTE_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            sudo chown -R ${{ secrets.TESTING_REMOTE_DEPLOYMENT_USER }}:${{ secrets.TESTING_REMOTE_DEPLOYMENT_USER }} ${{ secrets.TESTING_REMOTE_REPO_DIRECTORY }}
+      - name: PROJECT DEPENDENT - Install Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: "16.16.0"
+
+      - name: PROJECT DEPENDENT - Building assets
+        run: |
+          npm install
+          npm run development
+      - name: PROJECT DEPENDENT - Validate composer.json and composer.lock
+        run: composer validate --strict
+
+      - name: PROJECT DEPENDENT - Install composer dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: PROJECT DEPENDENT - Clearing application cache
+        run: php artisan cache:clear
+
+      - name: PROJECT DEPENDENT - Clearing view cache
+        run: php artisan view:clear
+
+      - name: REQUIRED - Deploy code to server
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.TESTING_REMOTE_PRIVATE_KEY }}
+          ARGS: "-rltgoDzvO"
+          REMOTE_HOST: ${{ secrets.TESTING_REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.TESTING_REMOTE_DEPLOYMENT_USER }}
+          TARGET: ${{ secrets.TESTING_REMOTE_REPO_DIRECTORY }}
+          EXCLUDE: "/.git/, /.docker/, /.github/"
+
+      - name: REQUIRED - Reset permissions
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: ${{ secrets.TESTING_REMOTE_HOST }}
+          username: ${{ secrets.TESTING_REMOTE_DEPLOYMENT_USER }}
+          key: ${{ secrets.TESTING_REMOTE_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            sudo chown -R ${{ secrets.TESTING_REMOTE_WEB_USER }}:${{ secrets.TESTING_REMOTE_WEB_USER }} ${{ secrets.TESTING_REMOTE_REPO_DIRECTORY }}
